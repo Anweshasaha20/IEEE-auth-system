@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { PrismaClient } from "@prisma/client";
+import { signupSchema, signinSchema } from "../auth.validator.js";
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -12,7 +13,15 @@ if (!JWT_SECRET) {
 
 const register = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const validation = signupSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        message: "Validation error",
+        errors: validation.error.errors[0].message,
+      });
+    }
+
+    const { username, password } = validation.data;
 
     const existingUser = await prisma.user.findUnique({
       where: { username },
@@ -34,15 +43,14 @@ const register = async (req, res) => {
       expiresIn: "1h",
     });
 
-    res
-      .status(201)
-      .json({ message: "User registered successfully" })
-      .cookie("token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 3600000, // 1 hour in milliseconds
-      });
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 3600000, // 1 hour in milliseconds
+    });
+
+    return res.status(201).json({ message: "User registered successfully" });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -50,7 +58,15 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const validation = signinSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        message: "Validation error",
+        errors: validation.error.errors[0].message,
+      });
+    }
+
+    const { username, password } = validation.data;
 
     const user = await prisma.user.findUnique({
       where: { username },
@@ -75,7 +91,7 @@ const login = async (req, res) => {
       maxAge: 3600000, // 1 hour in milliseconds
     });
 
-    res.status(200).json({ message: "Login successful" });
+    return res.status(200).json({ message: "Login successful" });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
